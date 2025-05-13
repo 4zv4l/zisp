@@ -4,7 +4,7 @@ A basic Lisp interpreter in Zig
 
 Can interprete code like this:
 
-```lisp
+```scm
 ;; functions
 (define (greet name)
   (define str (format #f "Hi ~A !" name))
