@@ -8,11 +8,11 @@ const Lisp = struct {
     rng: std.Random.DefaultPrng,
 
     const Builtins = [_]EnvEntry{
-        .{ .name = "true", .value = Lisp.LispValue{.boolean = true}},
-        .{ .name = "#t", .value = Lisp.LispValue{.boolean = true}},
-        .{ .name = "false", .value = Lisp.LispValue{.boolean = false}},
-        .{ .name = "#f", .value = Lisp.LispValue{.boolean = false}},
-        .{ .name = "nil", .value = Lisp.LispValue{.boolean = false}},
+        .{ .name = "true", .value = .{.boolean = true}},
+        .{ .name = "#t", .value = .{.boolean = true}},
+        .{ .name = "false", .value = .{.boolean = false}},
+        .{ .name = "#f", .value = .{.boolean = false}},
+        .{ .name = "nil", .value = .{.boolean = false}},
         .{ .name = "print", .value = .{ .builtin = lisp_print}},
         .{ .name = "eq", .value = .{ .builtin = lisp_eq}},
         .{ .name = "car", .value = .{ .builtin = lisp_car}},
