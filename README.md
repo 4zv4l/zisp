@@ -13,7 +13,7 @@ Can interprete code like this:
 ;; (print name) this would error since name isnt defined in this scope
 
 ;; booleans
-(if true "true" "false")
+(if true (format #t "rand: ~A~%" (rand)) "false")
 (cond
   [(eq "str" "abc") "false"] ;; can use both () and []
   [(eq "str" "str") "true"]) ;; to help readability
@@ -50,9 +50,9 @@ Can interprete code like this:
   `(format #t "~A~%" ,arg))
 
 (print "--- function ---")
-(inner-fn (rand)) ; same (rand) for each (format)
+(inner-fn (rand 5)) ; same (rand) for each (format)
 (print "--- macro ---")
-(inner-macro (rand)) ; exec (rand) for each (format)
+(inner-macro (rand 2 10)) ; exec (rand) for each (format)
 
 (print "--- recursive macro ---")
 (defmacro (m1 x) (if true `(m2 (m2 (m2 ,x)))))
@@ -73,13 +73,13 @@ my-counter: 5.00
 car: 1.00, cdr: [ 2.00, 3.00 ], cons: [ [ 1.00, 2.00 ], a ]
 fib(15.00) is 610.00
 --- function ---
-8717206279901288000.00
-8717206279901288000.00
-8717206279901288000.00
+4.00
+4.00
+4.00
 --- macro ---
--3070417978138852400.00
-8686245128725094000.00
--518762485279290700.00
+8.00
+5.00
+3.00
 --- recursive macro ---
 => 11.00
 => [ +, 3.00, 1.00 ]

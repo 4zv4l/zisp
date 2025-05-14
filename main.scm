@@ -6,7 +6,7 @@
 ;; (print name) this would error since name isnt defined in this scope
 
 ;; booleans
-(if true "true" "false")
+(if true (format #t "rand: ~A~%" (rand)) "false")
 (cond
   [(eq "str" "abc") "false"] ;; can use both () and []
   [(eq "str" "str") "true"]) ;; to help readability
@@ -43,9 +43,9 @@
   `(format #t "~A~%" ,arg))
 
 (print "--- function ---")
-(inner-fn (rand)) ; same (rand) for each (format)
+(inner-fn (rand 5)) ; same (rand) for each (format)
 (print "--- macro ---")
-(inner-macro (rand)) ; exec (rand) for each (format)
+(inner-macro (rand 2 10)) ; exec (rand) for each (format)
 
 (print "--- recursive macro ---")
 (defmacro (m1 x) (if true `(m2 (m2 (m2 ,x)))))

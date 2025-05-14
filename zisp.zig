@@ -140,9 +140,13 @@ const Lisp = struct {
         return LispValue{.symbol = "nil"};
     }
 
-    fn lisp_rand(self: *Lisp, _: []const LispValue) !LispValue {
-        const val = self.rng.random().int(i64);
-        return LispValue{.number = @floatFromInt(val)};
+    fn lisp_rand(self: *Lisp, args: []const LispValue) !LispValue {
+        const rng = self.rng.random();
+        return switch (args.len) {
+            0 => .{.number = rng.float(f64)},
+            1 => .{.number = @floatFromInt(rng.intRangeAtMost(i64, 0, @intFromFloat(args[0].number)))},
+            else => .{.number = @floatFromInt(rng.intRangeAtMost(i64, @intFromFloat(args[0].number), @intFromFloat(args[1].number)))},
+        };
     }
 
     fn lisp_macroexpand(self: *Lisp, args: []const LispValue) !LispValue {
