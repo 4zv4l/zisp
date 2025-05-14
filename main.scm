@@ -56,3 +56,8 @@
 (format #t "=> ~A~%" (macroexpand-1 '(m1 3)))
 (format #t "=> ~A~%" (macroexpand '(m1 3)))
 (format #t "=> ~R~%" (m1 3))
+
+;; splat `,@
+(defmacro (apply fn list)
+  `(,fn ,@list))
+(format #t "apply: ~A~%" (apply + (1 2)))
