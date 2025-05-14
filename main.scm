@@ -55,4 +55,4 @@
 (format #t "=> ~A~%" (macroexpand-1 '(m2 3)))
 (format #t "=> ~A~%" (macroexpand-1 '(m1 3)))
 (format #t "=> ~A~%" (macroexpand '(m1 3)))
-(format #t "=> ~A~%" (m1 3))
+(format #t "=> ~R~%" (m1 3))

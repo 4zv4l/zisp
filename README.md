@@ -62,7 +62,7 @@ Can interprete code like this:
 (format #t "=> ~A~%" (macroexpand-1 '(m2 3)))
 (format #t "=> ~A~%" (macroexpand-1 '(m1 3)))
 (format #t "=> ~A~%" (macroexpand '(m1 3)))
-(format #t "=> ~A~%" (m1 3))
+(format #t "=> ~R~%" (m1 3))
 ```
 
 Which will result in this:
@@ -85,7 +85,7 @@ fib(15.00) is 610.00
 => [ +, 3.00, 1.00 ]
 => [ m2, [ m2, [ m2, 3.00 ] ] ]
 => [ +, [ +, [ +, 3.00, 1.00 ], 1.00 ], 1.00 ]
-=> 6.00
+=> Number(6.00)
 ```
 
 ## Setup
