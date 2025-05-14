@@ -253,6 +253,12 @@ const Lisp = struct {
                 .list => |list| {
                     if (list[0] == .symbol and std.mem.eql(u8, list[0].symbol, "unquote")) {
                         try newlist.append(try self.eval(list[1]));
+                    } else if (list[0] == .symbol and std.mem.eql(u8, list[0].symbol, "unquote-splat")) {
+                        switch(list[1]) {
+                            .list => |l| try newlist.appendSlice(l),
+                            .symbol => try newlist.appendSlice((try self.eval(list[1])).list),
+                            else => return error.SplatExpectListOrSymbol,
+                        }
                     } else {
                         try newlist.append(try self.lisp_quasiquote(value));
                     }
@@ -428,11 +434,20 @@ const Lisp = struct {
                 }
                 if (lvalue == .symbol and quote == .QuasiQuote and std.mem.eql(u8, lvalue.symbol, ",")) {
                     index.* += 1;
-                    const value = try self.parse(tokens, index, .None);
-                    var list = std.ArrayList(LispValue).init(ally);
-                    try list.append(LispValue{.symbol = "unquote"});
-                    try list.append(value);
-                    return LispValue{ .list = try list.toOwnedSlice() };
+                    if (tokens.items[index.*] == .LispValue and tokens.items[index.*].LispValue == .symbol and std.mem.eql(u8, tokens.items[index.*].LispValue.symbol, "@")) {
+                        index.* += 1;
+                        const value = try self.parse(tokens, index, .Quote);
+                        var list = std.ArrayList(LispValue).init(ally);
+                        try list.append(LispValue{.symbol = "unquote-splat"});
+                        try list.append(value);
+                        return LispValue{ .list = try list.toOwnedSlice() };
+                    } else {
+                        const value = try self.parse(tokens, index, .None);
+                        var list = std.ArrayList(LispValue).init(ally);
+                        try list.append(LispValue{.symbol = "unquote"});
+                        try list.append(value);
+                        return LispValue{ .list = try list.toOwnedSlice() };
+                    }
                 }
                 index.* += 1; return lvalue;
             },
@@ -542,6 +557,10 @@ const Lisp = struct {
                     ',' => {
                         self.data = self.data[1..];
                         return .{ .LispValue = .{ .symbol = "," } };
+                    },
+                    '@' => {
+                        self.data = self.data[1..];
+                        return .{ .LispValue = .{ .symbol = "@" } };
                     },
                     else => { // need to check if bool, num or identifier
                         const end = std.mem.indexOfAny(u8, self.data, " ()\n") orelse self.data.len;
