@@ -1,4 +1,4 @@
-# zisps
+# zisp
 
 A basic Lisp interpreter in Zig
 
