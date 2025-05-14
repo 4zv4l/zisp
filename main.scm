@@ -1,10 +1,3 @@
-# zisps
-
-A basic Lisp interpreter in Zig
-
-Can interprete code like this:
-
-```scm
 ;; functions
 (define (greet name)
   (define str (format #f "Hi ~A !" name))
@@ -63,33 +56,3 @@ Can interprete code like this:
 (format #t "=> ~A~%" (macroexpand-1 '(m1 3)))
 (format #t "=> ~A~%" (macroexpand '(m1 3)))
 (format #t "=> ~A~%" (m1 3))
-```
-
-Which will result in this:
-
-```
-Hi Simon !
-my-counter: 5.00
-car: 1.00, cdr: [ 2.00, 3.00 ], cons: [ [ 1.00, 2.00 ], a ]
-fib(15.00) is 610.00
---- function ---
-8717206279901288000.00
-8717206279901288000.00
-8717206279901288000.00
---- macro ---
--3070417978138852400.00
-8686245128725094000.00
--518762485279290700.00
---- recursive macro ---
-=> 11.00
-=> [ +, 3.00, 1.00 ]
-=> [ m2, [ m2, [ m2, 3.00 ] ] ]
-=> [ +, [ +, [ +, 3.00, 1.00 ], 1.00 ], 1.00 ]
-=> 6.00
-```
-
-## Setup
-
-To compile simply run `zig build-exe -O ReleaseFast zisp.zig`.
-
-If you do not give a file as argument to the interpreter, it will start a `repl`.

@@ -5,6 +5,7 @@ const Env = std.SinglyLinkedList(EnvEntry);
 
 const Lisp = struct {
     env: Env, // functions, symbols
+    rng: std.Random.DefaultPrng,
 
     const Builtins = [_]EnvEntry{
         .{ .name = "true", .value = Lisp.LispValue{.boolean = true}},
@@ -20,6 +21,9 @@ const Lisp = struct {
         .{ .name = "cons", .value = .{ .builtin = lisp_cons}},
         .{ .name = "progn", .value = .{ .builtin = lisp_progn}},
         .{ .name = "format", .value = .{ .builtin = lisp_format}},
+        .{ .name = "rand", .value = .{ .builtin = lisp_rand}},
+        .{ .name = "macroexpand", .value = .{ .builtin = lisp_macroexpand}},
+        .{ .name = "macroexpand-1", .value = .{ .builtin = lisp_macroexpand_1}},
         .{ .name = "+", .value = .{ .builtin = lisp_plus}},
         .{ .name = "-", .value = .{ .builtin = lisp_minus}},
         .{ .name = "*", .value = .{ .builtin = lisp_mul}},
@@ -47,7 +51,9 @@ const Lisp = struct {
                 }
                 return ltrue;
             },
-            .function, .builtin => return error.CannotCompareFunctions,
+            .function => return self.lisp_eq(&[_]LispValue{.{.list = args[0].function.value}, .{.list = args[1].function.value}}),
+            .macro => return self.lisp_eq(&[_]LispValue{.{.list = args[0].macro.value}, .{.list = args[1].macro.value}}),
+            .builtin => return if (args[0].builtin == args[1].builtin) ltrue else lfalse,
         }
     }
 
@@ -63,7 +69,7 @@ const Lisp = struct {
 
     fn lisp_atom(_: *Lisp, args: []const LispValue) !LispValue {
         return switch (args[0]) {
-            .symbol, .number, .string, .boolean, .function, .builtin => LispValue{.boolean = true},
+            .symbol, .number, .string, .boolean, .function, .macro, .builtin => LispValue{.boolean = true},
             .list => LispValue{.boolean = false},
         };
     }
@@ -109,8 +115,12 @@ const Lisp = struct {
                     switch (specifier) {
                         '~' => try buff.append('~'),
                         '%' => try buff.append('\n'),
-                        'A' => {
+                        'A' => { // pretty print
                             try writer.print("{s}", .{vars[0]});
+                            vars = vars[1..];
+                        },
+                        'R' => { // "raw" format
+                            try writer.print("{any}", .{vars[0]});
                             vars = vars[1..];
                         },
                         else => return error.UnknownFormatSpecifier,
@@ -128,6 +138,55 @@ const Lisp = struct {
         if (!output) return LispValue{.string = str};
         std.debug.print("{s}", .{str});
         return LispValue{.symbol = "nil"};
+    }
+
+    fn lisp_rand(self: *Lisp, _: []const LispValue) !LispValue {
+        const val = self.rng.random().int(i64);
+        return LispValue{.number = @floatFromInt(val)};
+    }
+
+    fn lisp_macroexpand(self: *Lisp, args: []const LispValue) !LispValue {
+        var previous = args[0];
+        while (true) {
+            const next = try self.lisp_macroexpand_1(&[_]LispValue{previous});
+            if ((try self.lisp_eq(&[_]LispValue{previous, next})).boolean) break;
+            previous = next;
+        }
+        return previous;
+    }
+
+    fn lisp_macroexpand_1(self: *Lisp, args: []const LispValue) !LispValue {
+        if (args[0] != .list) return args[0];
+        switch (args[0].list[0]) {
+            .symbol => |symbol| {
+                if (self.envGet(symbol)) |sym| {
+                    if (sym != .macro) { // check inside the list for macro
+                        var newlist = std.ArrayList(LispValue).init(ally);
+                        for (0..args[0].list.len) |i| { // for each element of list check if macro
+                            const next = try self.lisp_macroexpand_1(&[_]LispValue{args[0].list[i]});
+                            // if yes (because changed) add it to the new list and append next unchanged
+                            if (!(try self.lisp_eq(&[_]LispValue{args[0].list[i], next})).boolean) {
+                                try newlist.append(next);
+                                try newlist.appendSlice(args[0].list[i+1..]);
+                                break;
+                            }
+                            try newlist.append(args[0].list[i]);
+                        }
+                        return LispValue{.list = try newlist.toOwnedSlice()};
+                    }
+                    // args[0] is a macro call
+                    if (sym.macro.args.len != args[0].list[1..].len) return error.MacroWrongNumberOfArguments;
+                    const backup_env = self.env; // to reset env later
+                    for (sym.macro.args, args[0].list[1..]) |name, val| try self.envAdd(name, val);
+                    var rc: LispValue = .{ .symbol =  "nil"};
+                    for (sym.macro.value) |val| rc = try self.eval(val); // only eval once
+                    self.env = backup_env; // reset env
+                    return rc;
+                }
+                return args[0];
+            },
+            else => return args[0],
+        }
     }
 
     fn lisp_plus(_: *Lisp, args: []const LispValue) !LispValue {
@@ -161,6 +220,16 @@ const Lisp = struct {
         }
     }
 
+    pub fn lisp_defmacro(self: *Lisp, args: []const LispValue) !void {
+        if (args[0] != .list) return error.DefineMacroExpectList;
+        const fname = args[0].list[0].symbol;
+        const fargs = args[0].list[1..];
+        var strargs = std.ArrayList([]const u8).init(ally);
+        for (fargs) |farg| try strargs.append(farg.symbol);
+        const body = args[1..];
+        try self.envAdd(fname, .{ .macro = .{ .args = try strargs.toOwnedSlice(), .value = body } });
+    }
+
     pub fn lisp_lambda(self: *Lisp, args: []const LispValue) !LispValue {
         if(args[0] == .list) {
             const fargs = args[0].list;
@@ -172,8 +241,26 @@ const Lisp = struct {
         return error.InvalidLambda;
     }
 
+    pub fn lisp_quasiquote(self: *Lisp, args: LispValue) !LispValue {
+        if (args != .list) return args;
+        var newlist = std.ArrayList(LispValue).init(ally);
+        for (args.list) |value| {
+            switch (value) {
+                .list => |list| {
+                    if (list[0] == .symbol and std.mem.eql(u8, list[0].symbol, "unquote")) {
+                        try newlist.append(try self.eval(list[1]));
+                    } else {
+                        try newlist.append(try self.lisp_quasiquote(value));
+                    }
+                },
+                else => |val| try newlist.append(val),
+            }
+        }
+        return LispValue{.list = try newlist.toOwnedSlice()};
+    }
+
     pub fn init() !Lisp {
-        var lisp = Lisp{ .env = .{} };
+        var lisp = Lisp{ .env = .{}, .rng = .init(@intCast(std.time.nanoTimestamp())) };
         var next: ?*Env.Node = null;
         for (Lisp.Builtins) |builtin| {
             const node = try ally.create(Env.Node);
@@ -216,21 +303,33 @@ const Lisp = struct {
             std.debug.print("{}: undefined function\n", .{list[0]});
             return error.UndefinedFunction;
         };
-        var args = std.ArrayList(LispValue).init(ally);
-        // eval args
-        for (list[1..]) |arg| try args.append(try self.eval(arg));
         switch (value) {
             .function => |function| {
+                var args = std.ArrayList(LispValue).init(ally);
+                for (list[1..]) |arg| try args.append(try self.eval(arg));
                 if (function.args.len != args.items.len) return error.FunctionWrongNumberOfArguments;
                 const backup_env = self.env;
                 self.env = function.env;
                 for (function.args, args.items) |name, val| try self.envAdd(name, val);
-                var rc: LispValue = undefined;
+                var rc: LispValue = .{ .symbol =  "nil"};
                 for (function.value) |val| rc = try self.eval(val);
                 self.env = backup_env;
                 return rc;
             },
-            .builtin => |builtin| return builtin(self, try args.toOwnedSlice()),
+            .macro => |macro| {
+                if (macro.args.len != list[1..].len) return error.MacroWrongNumberOfArguments;
+                const backup_env = self.env; // to reset env later
+                for (macro.args, list[1..]) |name, val| try self.envAdd(name, val);
+                var rc: LispValue = .{ .symbol =  "nil"};
+                for (macro.value) |val| rc = try self.eval(try self.eval(val));
+                self.env = backup_env; // reset env
+                return rc;
+            },
+            .builtin => |builtin| {
+                var args = std.ArrayList(LispValue).init(ally);
+                for (list[1..]) |arg| try args.append(try self.eval(arg));
+                return builtin(self, try args.toOwnedSlice());
+            },
             .list => return try self.eval(value),
             else => |e| {std.debug.print("got: {any}\n", .{e}); return error.ExpectedFunction; },
         }
@@ -240,7 +339,8 @@ const Lisp = struct {
     pub fn eval(self: *Lisp, value: LispValue) !LispValue {
         switch (value) {
             .number, .string, .boolean => return value, // self evaluate
-            .symbol => |symbol| return self.envGet(symbol) orelse return error.UnboundVariable,
+            .symbol => |symbol| return self.envGet(symbol) orelse {
+                std.debug.print("got: {s}\n", .{symbol}); return error.UnboundVariable; },
             .list => |list| { // handle list, function call, special forms
                 if (list.len == 0) return LispValue{.symbol = "nil"};
 
@@ -248,6 +348,8 @@ const Lisp = struct {
                     .symbol => |symbol| {
                         if (std.mem.eql(u8, symbol, "define")) {
                             try self.lisp_define(list[1..]);
+                        } else if (std.mem.eql(u8, symbol, "defmacro")) {
+                            try self.lisp_defmacro(list[1..]);
                         } else if (std.mem.eql(u8, symbol, "lambda")) {
                             return try self.lisp_lambda(list[1..]);
                         } else if (std.mem.eql(u8, symbol, "if")) {
@@ -259,6 +361,8 @@ const Lisp = struct {
                             }
                         } else if (std.mem.eql(u8, symbol, "quote")) {
                             return list[1];
+                        } else if (std.mem.eql(u8, symbol, "quasiquote")) {
+                            return self.lisp_quasiquote(list[1]);
                         } else if (std.mem.eql(u8, symbol, "set!")) {
                             const target = self.envFind(list[1].symbol) orelse return error.UnboundVariable;
                             target.data.value = try self.eval(list[2]);
@@ -314,14 +418,17 @@ const Lisp = struct {
                     index.* += 1;
                     const value = try self.parse(tokens, index, .QuasiQuote);
                     var list = std.ArrayList(LispValue).init(ally);
-                    try list.append(LispValue{.symbol = "quote"});
+                    try list.append(LispValue{.symbol = "quasiquote"});
                     try list.append(value);
                     return LispValue{ .list = try list.toOwnedSlice() };
                 }
                 if (lvalue == .symbol and quote == .QuasiQuote and std.mem.eql(u8, lvalue.symbol, ",")) {
                     index.* += 1;
                     const value = try self.parse(tokens, index, .None);
-                    return try self.eval(value);
+                    var list = std.ArrayList(LispValue).init(ally);
+                    try list.append(LispValue{.symbol = "unquote"});
+                    try list.append(value);
+                    return LispValue{ .list = try list.toOwnedSlice() };
                 }
                 index.* += 1; return lvalue;
             },
@@ -340,10 +447,15 @@ const Lisp = struct {
             value: []const LispValue,
             env: Env,
         },
+        macro: struct {
+            args: []const []const u8,
+            value: []const LispValue,
+        },
         builtin: *const fn(L: *Lisp, args: []const LispValue) anyerror!LispValue,
 
         pub fn format(self: LispValue, comptime fmt: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
-            if (fmt.len > 0 and fmt[0] == 's') {
+            const pretty = fmt.len > 0 and fmt[0] == 's';
+            if (pretty) {
                 switch(self) {
                     .string, .symbol => |sym| try writer.print("{s}", .{sym}),
                     .number => |n| try writer.print("{d:.2}", .{n}),
@@ -357,6 +469,8 @@ const Lisp = struct {
                         }
                         try writer.print(" ]", .{});
                     },
+                    .function => |f| try writer.print("Fn({s}){{ {s} }}", .{f.args, f.value}),
+                    .macro => |m| try writer.print("Macro({s}){{ {s} }}", .{m.args, m.value}),
                     else => try writer.print("{}", .{self}),
                 }
             } else {
@@ -365,8 +479,15 @@ const Lisp = struct {
                     .string => |str| try writer.print("String(\"{s}\")", .{str}),
                     .boolean =>|b| try writer.print("Boolean({})", .{b}),
                     .symbol => |i| try writer.print("Symbol(\"{s}\")", .{i}),
-                    .list => |l| try writer.print("List({any})", .{l}),
-                    .function => |f| try writer.print("Fn({any}){{ {any} }}", .{f.args, f.value}),
+                    .list => |l|  {
+                        if (pretty) {
+                            try writer.print("List({s})", .{l});
+                        } else {
+                            try writer.print("List({any})", .{l});
+                        }
+                    },
+                    .function => |f| try writer.print("Fn({s}){{ {any} }}", .{f.args, f.value}),
+                    .macro => |m| try writer.print("Macro({s}){{ {any} }}", .{m.args, m.value}),
                     .builtin => try writer.print("Builtin", .{})
                 }
             }
