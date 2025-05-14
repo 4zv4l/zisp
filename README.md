@@ -69,6 +69,7 @@ Which will result in this:
 
 ```
 Hi Simon !
+rand: 0.53
 my-counter: 5.00
 car: 1.00, cdr: [ 2.00, 3.00 ], cons: [ [ 1.00, 2.00 ], a ]
 fib(15.00) is 610.00
