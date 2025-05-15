@@ -94,3 +94,9 @@ fib(15.00) is 610.00
 To compile simply run `zig build-exe -O ReleaseSafe zisp.zig`.
 
 If you do not give a file as argument to the interpreter, it will start a `repl`.
+
+## TODO
+
+- [ ] Free used memory when possible
+- [ ] Tail call optimization
+- [ ] add IO (File, Network)
