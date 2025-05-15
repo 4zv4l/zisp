@@ -313,32 +313,53 @@ const Lisp = struct {
             std.debug.print("{}: undefined function\n", .{list[0]});
             return error.UndefinedFunction;
         };
-        switch (value) {
+        var fnargs = list[1..]; // workaround for tail call
+        func: switch (value) {
             .function => |function| {
                 var args = std.ArrayList(LispValue).init(ally);
-                for (list[1..]) |arg| try args.append(try self.eval(arg));
+                for (fnargs) |arg| try args.append(try self.eval(arg));
                 if (function.args.len != args.items.len) return error.FunctionWrongNumberOfArguments;
                 const backup_env = self.env;
                 self.env = function.env;
+                // before reset env need to free each node until we reach backup_env
                 for (function.args, args.items) |name, val| try self.envAdd(name, val);
                 var rc: LispValue = .{ .symbol =  "nil"};
-                for (function.value) |val| rc = try self.eval(val);
+                // need to free each rc depending on if its a str/list/...
+                // except last one function.value[0..function.value-1]
+                // return the last rc
+                for (function.value[0..function.value.len-1]) |val| rc = try self.eval(val);
+                const last = function.value[function.value.len-1];
+                if (last == .list and last.list[0] == .symbol and std.mem.eql(u8, last.list[0].symbol, list[0].symbol)) {
+                    // change args
+                    fnargs = last.list[1..];
+                    continue :func value;
+                } else {
+                    rc = try self.eval(last);
+                }
                 self.env = backup_env;
                 return rc;
             },
             .macro => |macro| {
                 if (macro.args.len != list[1..].len) return error.MacroWrongNumberOfArguments;
+                // before reset env need to free each node until we reach backup_env
                 const backup_env = self.env; // to reset env later
                 for (macro.args, list[1..]) |name, val| try self.envAdd(name, val);
                 var rc: LispValue = .{ .symbol =  "nil"};
+                // need to free each rc depending on if its a str/list/...
+                // except last one macro.value[0..macro.value-1]
+                // return the last rc
                 for (macro.value) |val| rc = try self.eval(try self.eval(val));
                 self.env = backup_env; // reset env
                 return rc;
             },
             .builtin => |builtin| {
+                // need to free the args list
+                // and each LispValue inside depending on if its a str/list/...
                 var args = std.ArrayList(LispValue).init(ally);
+                defer args.deinit();
                 for (list[1..]) |arg| try args.append(try self.eval(arg));
-                return builtin(self, try args.toOwnedSlice());
+                const rc = builtin(self, args.items);
+                return rc;
             },
             .list => return try self.eval(value),
             else => |e| {std.debug.print("got: {any}\n", .{e}); return error.ExpectedFunction; },
@@ -347,7 +368,7 @@ const Lisp = struct {
 
     // eval a LispValue
     pub fn eval(self: *Lisp, value: LispValue) !LispValue {
-        switch (value) {
+        ev: switch (value) {
             .number, .string, .boolean => return value, // self evaluate
             .symbol => |symbol| return self.envGet(symbol) orelse {
                 std.debug.print("got: {s}\n", .{symbol}); return error.UnboundVariable; },
@@ -365,9 +386,9 @@ const Lisp = struct {
                         } else if (std.mem.eql(u8, symbol, "if")) {
                             const boolean = try self.eval(list[1]);
                             if (boolean == .boolean and boolean.boolean == true) {
-                                return try self.eval(list[2]);
+                                continue :ev list[2];
                             } else if (list.len > 2) {
-                                return try self.eval(list[3]);
+                                continue :ev list[3];
                             }
                         } else if (std.mem.eql(u8, symbol, "quote")) {
                             return list[1];
@@ -383,7 +404,7 @@ const Lisp = struct {
                                 const booleanfn = combo.list[0];
                                 const retvalue = combo.list[1];
                                 if ((try self.eval(booleanfn)).boolean == true) {
-                                    return self.eval(retvalue);
+                                    continue :ev retvalue;
                                 }
                             }
                         } else {
