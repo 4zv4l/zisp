@@ -98,5 +98,5 @@ If you do not give a file as argument to the interpreter, it will start a `repl`
 ## TODO
 
 - [ ] Free used memory when possible
-- [ ] Tail call optimization
+- [ ] Tail call optimization (using labelled switch)
 - [ ] add IO (File, Network)
