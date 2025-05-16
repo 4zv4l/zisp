@@ -43,7 +43,7 @@
   `(format #t "~A~%" ,arg))
 
 (print "--- function ---")
-(inner-fn (rand 5)) ; same (rand) for each (format)
+(inner-fn (rand 30)) ; same (rand) for each (format)
 (print "--- macro ---")
 (inner-macro (rand 2 10)) ; exec (rand) for each (format)
 

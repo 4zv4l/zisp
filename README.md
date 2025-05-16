@@ -50,7 +50,7 @@ Can interprete code like this:
   `(format #t "~A~%" ,arg))
 
 (print "--- function ---")
-(inner-fn (rand 5)) ; same (rand) for each (format)
+(inner-fn (rand 30)) ; same (rand) for each (format)
 (print "--- macro ---")
 (inner-macro (rand 2 10)) ; exec (rand) for each (format)
 
@@ -91,12 +91,12 @@ fib(15.00) is 610.00
 
 ## Setup
 
-To compile simply run `zig build-exe -O ReleaseSafe zisp.zig`.
+To compile simply run `zig build`.
 
 If you do not give a file as argument to the interpreter, it will start a `repl`.
 
 ## TODO
 
 - [ ] Free used memory when possible
-- [ ] Tail call optimization (using labelled switch)
+- [X] Tail call optimization (using labelled switch)
 - [ ] add IO (File, Network)

@@ -622,6 +622,12 @@ pub fn repl(lisp: *Lisp, data: []const u8) !Lisp.LispValue {
     return rc;
 }
 
+test "basic" {
+    var lisp = try Lisp.init();
+    const rc = repl(&lisp, "(+ 2 (+ 1 1))");
+    try std.testing.expectEqual(rc, Lisp.LispValue{.number = 4});
+}
+
 pub fn main() !void {
     var lisp = try Lisp.init();
     if (std.os.argv.len == 2) {
