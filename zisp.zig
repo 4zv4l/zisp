@@ -58,12 +58,18 @@ const Lisp = struct {
     }
 
     fn lisp_car(_: *Lisp, args: []const LispValue) !LispValue {
+        if (args[0] == .symbol and std.mem.eql(u8, args[0].symbol, "nil")) return .{.boolean = false};
+        if (args[0] == .boolean and args[0].boolean == false) return .{.boolean = false};
         if (args[0] != .list) return error.CarNeedList;
+        if (args[0].list.len == 0) return LispValue{.boolean = false};
         return args[0].list[0];
     }
 
     fn lisp_cdr(_: *Lisp, args: []const LispValue) !LispValue {
+        if (args[0] == .symbol and std.mem.eql(u8, args[0].symbol, "nil")) return .{.boolean = false};
+        if (args[0] == .boolean and args[0].boolean == false) return .{.boolean = false};
         if (args[0] != .list) return error.CdrNeedList;
+        if (args[0].list.len <= 1) return LispValue{.boolean = false};
         return LispValue{.list = args[0].list[1..]};
     }
 
@@ -80,7 +86,7 @@ const Lisp = struct {
         const first = args[0];
         const last = args[1];
         try list.append(first);
-        if (last == .boolean and last.boolean == false) {
+        if ((last == .boolean and last.boolean == false) or (last == .symbol and std.mem.eql(u8, last.symbol, "nil"))) {
             return LispValue{.list = try list.toOwnedSlice()};
         }
         if (last == .list) {
@@ -387,10 +393,11 @@ const Lisp = struct {
                             const boolean = try self.eval(list[1]);
                             if (boolean == .boolean and boolean.boolean == true) {
                                 continue :ev list[2];
-                            } else if (list.len > 2) {
+                            } else if (list.len > 3) {
                                 continue :ev list[3];
                             }
                         } else if (std.mem.eql(u8, symbol, "quote")) {
+                            if (list[1] == .list and list[1].list.len == 0) return LispValue{.boolean = false};
                             return list[1];
                         } else if (std.mem.eql(u8, symbol, "quasiquote")) {
                             return self.lisp_quasiquote(list[1]);

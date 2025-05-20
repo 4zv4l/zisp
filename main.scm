@@ -45,7 +45,7 @@
 (print "--- function ---")
 (inner-fn (rand 30)) ; same (rand) for each (format)
 (print "--- macro ---")
-(inner-macro (rand 2 10)) ; exec (rand) for each (format)
+(inner-macro (rand 2 75)) ; exec (rand) for each (format)
 
 (print "--- recursive macro ---")
 (defmacro (m1 x) (if true `(m2 (m2 (m2 ,x)))))
@@ -61,3 +61,11 @@
 (defmacro (apply fn list)
   `(,fn ,@list))
 (format #t "apply: ~A~%" (apply + (1 2)))
+
+;; map macro
+(define (map op list)
+  (if (eq list nil)
+    nil
+    (cons (op (car list))
+          (map op (cdr list)))))
+(format #t "map: ~A~%" (map (lambda (x) (+ x 1)) '(1 2 3)))
