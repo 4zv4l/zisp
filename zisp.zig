@@ -371,11 +371,17 @@ const Lisp = struct {
             .builtin => |builtin| {
                 // need to free the args list
                 // and each LispValue inside depending on if its a str/list/...
+                var arena_backup = self.arena;
+                self.arena = std.heap.ArenaAllocator.init(arena_backup.child_allocator);
                 var args = std.ArrayList(LispValue).init(self.arena.allocator());
                 defer args.deinit();
                 for (list[1..]) |arg| try args.append(try self.eval(arg));
-                const rc = builtin(self, args.items);
-                return rc;
+                const rc = try builtin(self, args.items);
+                const rc_dup = try arena_backup.allocator().create(LispValue);
+                rc_dup.* = rc;
+                self.arena.deinit();
+                self.arena = arena_backup;
+                return rc_dup.*;
             },
             .list => return try self.eval(value),
             else => |e| {
