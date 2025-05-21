@@ -69,3 +69,4 @@
     (cons (op (car list))
           (map op (cdr list)))))
 (format #t "map: ~A~%" (map (lambda (x) (+ x 1)) '(1 2 3)))
+(format #t "map: ~A~%" (map (lambda (x) (+ x 1)) '()))
