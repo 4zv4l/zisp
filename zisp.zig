@@ -359,12 +359,18 @@ const Lisp = struct {
                 if (macro.args.len != list[1..].len) return error.MacroWrongNumberOfArguments;
                 // before reset env need to free each node until we reach backup_env
                 const backup_env = self.env; // to reset env later
+                var arena_backup = self.arena;
+                self.arena = std.heap.ArenaAllocator.init(arena_backup.child_allocator);
                 for (macro.args, list[1..]) |name, val| try self.envAdd(name, val);
                 var rc: LispValue = .{ .symbol = "nil" };
                 // need to free each rc depending on if its a str/list/...
                 // except last one macro.value[0..macro.value-1]
                 // return the last rc
                 for (macro.value) |val| rc = try self.eval(try self.eval(val));
+                const rc_dup = try arena_backup.allocator().create(LispValue);
+                rc_dup.* = rc;
+                self.arena.deinit();
+                self.arena = arena_backup;
                 self.env = backup_env; // reset env
                 return rc;
             },
@@ -529,7 +535,8 @@ const Lisp = struct {
             const pretty = fmt.len > 0 and fmt[0] == 's';
             if (pretty) {
                 switch (self) {
-                    .string, .symbol => |sym| try writer.print("{s}", .{sym}),
+                    .string => |str| try writer.print("\"{s}\"", .{str}),
+                    .symbol => |sym| try writer.print("{s}", .{sym}),
                     .number => |n| try writer.print("{d:.2}", .{n}),
                     .boolean => |b| try writer.print("{}", .{b}),
                     .list => |l| {
